@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Интерактивный Конструктор Тестов</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            overscroll-behavior: none; /* Предотвращает "оттягивание" страницы на мобильных устройствах */
+        }
+        .font-arial-black {
+            font-family: 'Arial Black', 'Arial Bold', Gadget, sans-serif;
+        }
+        /* Стили для перетаскивания */
+        .draggable {
+            cursor: grab;
+            transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+            user-select: none; /* Предотвращает выделение текста */
+        }
+        .dragging {
+            cursor: grabbing;
+            opacity: 0.7;
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .dropzone {
+            border: 2px dashed #ccc;
+            transition: background-color 0.2s ease;
+        }
+        .dropzone.drag-over {
+            background-color: #e0e0e0;
+            border-color: #aaa;
+        }
+        /* Стили для карточек вопросов в конструкторе */
+        .question-editor-card {
+            border: 1px solid #ddd;
+            padding: 16px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        /* Анимация появления/исчезновения */
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .fade-out {
+            animation: fadeOut 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+        /* Стиль для кастомного скроллбара (опционально) */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Стили для интерактивных элементов при прохождении теста */
+        .answer-option {
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .answer-option:hover {
+            border-color: #60a5fa; /* Tailwind blue-400 */
+            background-color: #eff6ff; /* Tailwind blue-50 */
+        }
+        .answer-option.selected {
+            background-color: #93c5fd; /* Tailwind blue-300 */
+            border-color: #3b82f6; /* Tailwind blue-600 */
+            color: white;
+        }
+        .match-item, .sequence-item {
+            cursor: grab;
+            user-select: none; /* Предотвращает выделение текста при перетаскивании */
+        }
+        .match-column .drop-target.drag-over, .sequence-list .drop-target.drag-over {
+             background-color: #f0f9ff; /* Tailwind sky-50 */
+        }
+         /* Стили для кнопок */
+        .btn {
+            @apply font-bold py-2 px-4 rounded shadow-md transition-all duration-150 ease-in-out;
+        }
+        .btn-primary {
+            @apply bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700;
+        }
+        .btn-secondary {
+            @apply bg-gray-500 text-white hover:bg-gray-600 active:bg-gray-700;
+        }
+        .btn-danger {
+            @apply bg-red-500 text-white hover:bg-red-600 active:bg-red-700;
+        }
+        .btn-success {
+            @apply bg-green-500 text-white hover:bg-green-600 active:bg-green-700;
+        }
+        .btn-warning {
+             @apply bg-yellow-500 text-white hover:bg-yellow-600 active:bg-yellow-700;
+        }
+        .btn-time {
+            @apply bg-gray-300 text-gray-700 hover:bg-gray-400 w-8 h-8 flex items-center justify-center rounded-full text-lg;
+        }
+        .prize-1 { background-color: #FFD700; /* Gold */ }
+        .prize-2 { background-color: #C0C0C0; /* Silver */ }
+        .prize-3 { background-color: #CD7F32; /* Bronze */ }
+
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div id="app-container" class="min-h-screen flex flex-col">
+        <header class="bg-slate-800 text-white p-4 shadow-lg sticky top-0 z-50">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-xl md:text-3xl font-arial-black">Интерактивные Тесты</h1>
+                <button id="navigateToCreateTestBtn" class="btn btn-primary">Создать Тест</button>
+            </div>
+        </header>
+
+        <main id="main-content" class="flex-grow container mx-auto p-4 md:p-8">
+            <section id="create-test-view">
+                <div class="flex flex-col lg:flex-row gap-6">
+                    <div id="quiz-construction-area" class="flex-grow bg-gray-100 p-6 rounded-xl shadow-lg min-h-[500px] dropzone order-2 lg:order-1">
+                        <div id="questions-list" class="space-y-4">
+                             <p id="drop-placeholder" class="text-gray-500 text-center py-10">Перетащите тип вопроса сюда или нажмите на него, чтобы начать</p>
+                        </div>
+                    </div>
+                    <aside id="question-templates-sidebar" class="w-full lg:w-1/3 xl:w-1/4 bg-slate-200 p-4 rounded-xl shadow-lg order-1 lg:order-2">
+                        <h3 class="text-xl font-bold mb-4 font-arial-black text-slate-700">Типы Вопросов:</h3>
+                        <div class="space-y-3">
+                            <div data-type="single-choice" class="draggable bg-sky-400 hover:bg-sky-500 text-white p-4 rounded-lg shadow-md cursor-grab transition-shadow hover:shadow-lg" draggable="true">Один ответ</div>
+                            <div data-type="multiple-choice" class="draggable bg-emerald-400 hover:bg-emerald-500 text-white p-4 rounded-lg shadow-md cursor-grab transition-shadow hover:shadow-lg" draggable="true">Несколько ответов</div>
+                            <div data-type="matching" class="draggable bg-amber-400 hover:bg-amber-500 text-white p-4 rounded-lg shadow-md cursor-grab transition-shadow hover:shadow-lg" draggable="true">Сопоставление</div>
+                            <div data-type="sequencing" class="draggable bg-purple-400 hover:bg-purple-500 text-white p-4 rounded-lg shadow-md cursor-grab transition-shadow hover:shadow-lg" draggable="true">Последовательность</div>
+                            <div data-type="true-false" class="draggable bg-rose-400 hover:bg-rose-500 text-white p-4 rounded-lg shadow-md cursor-grab transition-shadow hover:shadow-lg" draggable="true">Правда/Ложь</div>
+                            <div data-type="short-answer" class="draggable bg-indigo-400 hover:bg-indigo-500 text-white p-4 rounded-lg shadow-md cursor-grab transition-shadow hover:shadow-lg" draggable="true">Короткий ответ</div>
+                        </div>
+                    </aside>
+                </div>
+                <div class="mt-8 flex justify-center">
+                    <button id="publishTestBtn" class="btn btn-success text-lg px-8 py-3">Опубликовать Тест</button>
+                </div>
+            </section>
+
+            <section id="name-entry-view" class="hidden text-center max-w-lg mx-auto bg-white p-8 rounded-xl shadow-xl">
+                <h2 class="text-3xl font-bold mb-6 font-arial-black text-slate-700">Добро пожаловать!</h2>
+                <p id="quizLinkInfo" class="mb-6 text-slate-600">Вы собираетесь пройти тест. Пожалуйста, введите ваше имя.</p>
+                <input type="text" id="participantNameInput" placeholder="Ваше имя" class="border-2 border-gray-300 p-3 rounded-lg w-full mb-6 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-shadow">
+                <button id="startTestBtn" class="btn btn-primary w-full text-lg py-3">Начать Тест</button>
+            </section>
+
+            <section id="question-view" class="hidden max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-xl">
+                <div class="flex justify-between items-center mb-6">
+                    <div id="question-number" class="text-sm text-slate-500">Вопрос X из Y</div>
+                    <div id="timer" class="text-xl font-bold text-red-500">Время: <span id="timeLeft">30</span>с</div>
+                </div>
+                <div id="question-container" class="mb-6 min-h-[200px]">
+                    </div>
+                <div class="flex justify-center space-x-4">
+                    <button id="submitAnswerBtn" class="btn btn-success px-6 py-3">Ответить</button>
+                    <button id="nextQuestionBtn" class="btn btn-primary px-6 py-3 hidden">Следующий вопрос</button>
+                </div>
+            </section>
+
+            <section id="results-view" class="hidden max-w-xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-xl">
+                <h2 class="text-3xl font-bold mb-6 text-center font-arial-black text-slate-700">Результаты Теста</h2>
+                <div class="overflow-x-auto">
+                    <table id="leaderboardTable" class="w-full table-auto border-collapse">
+                        <thead>
+                            <tr class="bg-slate-200 text-slate-700">
+                                <th class="border border-slate-300 p-3 text-left">Место</th>
+                                <th class="border border-slate-300 p-3 text-left">Имя</th>
+                                <th class="border border-slate-300 p-3 text-left">Счет</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+                     <button id="backToCreateBtnResults" class="btn btn-secondary w-full sm:w-auto">Создать новый тест</button>
+                     <button id="retakeTestBtn" class="btn btn-warning w-full sm:w-auto">Пройти заново (Новый участник)</button>
+                </div>
+            </section>
+        </main>
+
+        <div id="testLinkModal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm overflow-y-auto h-full w-full hidden items-center justify-center p-4 z-[100]">
+            <div class="bg-white p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-all duration-300 ease-out scale-95 opacity-0" id="modal-content">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold font-arial-black text-slate-700">Тест Опубликован!</h3>
+                    <button id="closeModalBtn" class="text-slate-500 hover:text-slate-700 text-2xl">&times;</button>
+                </div>
+                <p class="mb-3 text-slate-600">Поделитесь этой ссылкой с участниками:</p>
+                <input type="text" id="generatedLink" readonly class="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 mb-3 focus:outline-none">
+                <button id="copyLinkBtn" class="btn btn-primary w-full mb-4 py-3">Копировать ссылку</button>
+                <p class="text-xs text-slate-500">Примечание: Тест доступен только в текущей сессии браузера. Для полноценного обмена данными потребуется серверная часть.</p>
+            </div>
+        </div>
+
+        <div id="customMessageBox" class="fixed bottom-5 right-5 bg-red-600 text-white p-4 rounded-lg shadow-xl hidden z-[200] transition-opacity duration-300 opacity-0">
+            <p id="customMessageText"></p>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const navigateToCreateTestBtn = document.getElementById('navigateToCreateTestBtn');
+        const createTestView = document.getElementById('create-test-view');
+        const nameEntryView = document.getElementById('name-entry-view');
+        const questionView = document.getElementById('question-view');
+        const resultsView = document.getElementById('results-view');
+        const mainContent = document.getElementById('main-content');
+
+        const questionTemplatesSidebar = document.getElementById('question-templates-sidebar');
+        const quizConstructionArea = document.getElementById('quiz-construction-area');
+        const questionsList = document.getElementById('questions-list');
+        const dropPlaceholder = document.getElementById('drop-placeholder');
+        const publishTestBtn = document.getElementById('publishTestBtn');
+
+        const participantNameInput = document.getElementById('participantNameInput');
+        const startTestBtn = document.getElementById('startTestBtn');
+        const quizLinkInfo = document.getElementById('quizLinkInfo');
+
+        const questionNumberDisplay = document.getElementById('question-number');
+        const timerDisplay = document.getElementById('timer');
+        const timeLeftDisplay = document.getElementById('timeLeft');
+        const questionContainer = document.getElementById('question-container');
+        const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+        const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+
+        const leaderboardTable = document.getElementById('leaderboardTable');
+        const leaderboardBody = document.getElementById('leaderboardBody');
+        const backToCreateBtnResults = document.getElementById('backToCreateBtnResults');
+        const retakeTestBtn = document.getElementById('retakeTestBtn');
+
+
+        const testLinkModal = document.getElementById('testLinkModal');
+        const modalContent = document.getElementById('modal-content');
+        const generatedLinkInput = document.getElementById('generatedLink');
+        const copyLinkBtn = document.getElementById('copyLinkBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+
+        const customMessageBox = document.getElementById('customMessageBox');
+        const customMessageText = document.getElementById('customMessageText');
+
+        // --- State Variables ---
+        let currentView = 'create-test-view';
+        let quizData = []; // Array of question objects
+        let currentQuizId = null;
+        let currentParticipantName = '';
+        let currentQuestionIndex = 0;
+        let participantScores = {}; // { name: score }
+        let questionTimerInterval;
+        let currentQuestionTimeLeft;
+        let userAnswers = []; // Stores answers for the current test attempt
+
+        // --- Constants ---
+        const DEFAULT_TIME_LIMIT = 30; // seconds
+        const TIME_STEP = 10; // seconds
+
+        // --- Utility Functions ---
+        function generateId() {
+            return '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function showView(viewId) {
+            [createTestView, nameEntryView, questionView, resultsView].forEach(view => {
+                if (view.id === viewId) {
+                    view.classList.remove('hidden');
+                    view.classList.add('fade-in');
+                } else {
+                    view.classList.add('hidden');
+                    view.classList.remove('fade-in');
+                }
+            });
+            currentView = viewId;
+            window.scrollTo(0,0); // Scroll to top on view change
+        }
+
+        function showMessage(message, isError = true, duration = 3000) {
+            customMessageText.textContent = message;
+            customMessageBox.classList.remove('bg-red-600', 'bg-green-600');
+            customMessageBox.classList.add(isError ? 'bg-red-600' : 'bg-green-600');
+            customMessageBox.classList.remove('hidden', 'opacity-0');
+            customMessageBox.classList.add('opacity-100');
+
+
+            setTimeout(() => {
+                customMessageBox.classList.remove('opacity-100');
+                customMessageBox.classList.add('opacity-0');
+                setTimeout(() => customMessageBox.classList.add('hidden'), 300); // Wait for transition
+            }, duration);
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // --- Test Creation Logic ---
+        function initializeCreateTestView() {
+            quizData = [];
+            questionsList.innerHTML = ''; // Clear existing questions
+            if (dropPlaceholder) { // Check if dropPlaceholder exists
+                 dropPlaceholder.classList.remove('hidden');
+                 dropPlaceholder.textContent = "Перетащите тип вопроса сюда или нажмите на него, чтобы начать"; // Update text
+            }
+            showView('create-test-view');
+        }
+
+        function addQuestionToQuiz(type) {
+            if (dropPlaceholder) dropPlaceholder.classList.add('hidden');
+
+            const questionId = generateId();
+            const question = {
+                id: questionId,
+                type: type,
+                text: '',
+                timeLimit: DEFAULT_TIME_LIMIT,
+                options: [],
+                correctAnswer: null // Initialize correctAnswer
+            };
+
+            switch (type) {
+                case 'single-choice':
+                case 'multiple-choice':
+                    question.options = [{ id: generateId(), text: '' }, { id: generateId(), text: '' }];
+                    question.correctAnswer = type === 'single-choice' ? null : [];
+                    break;
+                case 'matching':
+                    question.pairs = [{ id: generateId(), left: '', right: '' }, { id: generateId(), left: '', right: '' }];
+                    // correctAnswer is implicit in the pairs structure, no need to set it here
+                    break;
+                case 'sequencing':
+                    question.items = [{ id: generateId(), text: '' }, { id: generateId(), text: '' }];
+                    // correctAnswer is implicit in the items order
+                    break;
+                case 'true-false':
+                    question.options = [
+                        { id: generateId(), text: 'Правда', value: true },
+                        { id: generateId(), text: 'Ложь', value: false }
+                    ];
+                    question.correctAnswer = null; // Will be true or false
+                    break;
+                case 'short-answer':
+                    question.correctAnswer = ''; // A string
+                    break;
+            }
+            quizData.push(question);
+            renderQuestionEditor(question);
+        }
+
+        function renderQuestionEditor(question) {
+            const card = document.createElement('div');
+            card.className = 'question-editor-card bg-white p-4 rounded-lg shadow mb-4 fade-in';
+            card.dataset.questionId = question.id;
+
+            let optionsHtml = '';
+            // Time limit controls
+            const timeControls = `
+                <div class="flex items-center space-x-2 mb-3">
+                    <label class="text-sm font-medium text-gray-700">Время (сек):</label>
+                    <button data-action="decrease-time" class="btn-time">-</button>
+                    <span class="time-value w-10 text-center">${question.timeLimit}</span>
+                    <button data-action="increase-time" class="btn-time">+</button>
+                </div>
+            `;
+
+            // Question text input
+            const questionTextHtml = `
+                <textarea data-field="text" class="w-full p-2 border border-gray-300 rounded-md mb-3" placeholder="Введите текст вопроса...">${question.text}</textarea>
+            `;
+
+            if (question.type === 'single-choice' || question.type === 'multiple-choice') {
+                optionsHtml = question.options.map((opt, index) => `
+                    <div class="flex items-center mb-2 option-item" data-option-id="${opt.id}">
+                        <input type="${question.type === 'single-choice' ? 'radio' : 'checkbox'}" name="correct_${question.id}" data-action="set-correct" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" ${
+                            (question.type === 'single-choice' && question.correctAnswer === opt.id) || (question.type === 'multiple-choice' && Array.isArray(question.correctAnswer) && question.correctAnswer.includes(opt.id)) ? 'checked' : ''
+                        }>
+                        <input type="text" data-field="option-text" value="${opt.text}" class="flex-grow p-2 border border-gray-300 rounded-md" placeholder="Вариант ${index + 1}">
+                        <button data-action="remove-option" class="ml-2 text-red-500 hover:text-red-700 p-1 text-xl font-bold">&times;</button>
+                    </div>
+                `).join('');
+                optionsHtml += `<button data-action="add-option" class="text-sm btn btn-secondary mt-2">Добавить вариант</button>`;
+            } else if (question.type === 'matching') {
+                optionsHtml = `<h4 class="text-sm font-medium text-gray-700 mb-1">Пары для сопоставления (укажите правильные пары здесь):</h4>`;
+                optionsHtml += question.pairs.map((pair, index) => `
+                    <div class="flex items-center gap-2 mb-2 match-pair-editor" data-pair-id="${pair.id}">
+                        <input type="text" data-field="match-left" value="${pair.left}" class="w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Левый элемент ${index + 1}">
+                        <span class="text-gray-500 mx-1">=</span>
+                        <input type="text" data-field="match-right" value="${pair.right}" class="w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Правый элемент ${index + 1}">
+                        <button data-action="remove-match-pair" class="ml-1 text-red-500 hover:text-red-700 p-1 text-xl font-bold">&times;</button>
+                    </div>
+                `).join('');
+                optionsHtml += `<button data-action="add-match-pair" class="text-sm btn btn-secondary mt-2">Добавить пару</button>`;
+            } else if (question.type === 'sequencing') {
+                optionsHtml = `<h4 class="text-sm font-medium text-gray-700 mb-1">Элементы последовательности (установите правильный порядок перетаскиванием):</h4>`;
+                optionsHtml += `<div class="sequence-items-editor space-y-2">` + question.items.map((item, index) => `
+                    <div class="flex items-center sequence-item-editor bg-gray-50 p-2 rounded border cursor-move" data-item-id="${item.id}" draggable="true">
+                        <span class="mr-2 text-gray-400">☰</span>
+                        <input type="text" data-field="sequence-item-text" value="${item.text}" class="flex-grow p-2 border border-gray-300 rounded-md" placeholder="Элемент ${index + 1}">
+                        <button data-action="remove-sequence-item" class="ml-2 text-red-500 hover:text-red-700 p-1 text-xl font-bold">&times;</button>
+                    </div>
+                `).join('') + `</div>`;
+                optionsHtml += `<button data-action="add-sequence-item" class="text-sm btn btn-secondary mt-2">Добавить элемент</button>`;
+            } else if (question.type === 'true-false') {
+                optionsHtml = `<div class="space-y-2">` + question.options.map(opt => `
+                    <label class="flex items-center p-2 border rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="correct_tf_${question.id}" data-action="set-correct-tf" value="${opt.value}" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" ${question.correctAnswer === opt.value ? 'checked' : ''}>
+                        ${opt.text}
+                    </label>
+                `).join('') + `</div>`;
+            } else if (question.type === 'short-answer') {
+                optionsHtml = `
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Правильный ответ (регистр не учитывается при проверке):</label>
+                    <input type="text" data-field="short-answer-correct" value="${question.correctAnswer}" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Введите точный ответ">
+                `;
+            }
+
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="text-lg font-arial-black text-slate-600">${getQuestionTypeName(question.type)}</h3>
+                    <button data-action="remove-question" class="text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>
+                </div>
+                ${questionTextHtml}
+                ${timeControls}
+                <div class="options-container mt-3">${optionsHtml}</div>
+            `;
+            questionsList.appendChild(card);
+            addEditorEventListeners(card, question.id);
+            if (question.type === 'sequencing') { // Only make sequence items in editor draggable
+                 makeSequenceItemsDraggable(card.querySelector('.sequence-items-editor'));
+            }
+        }
+
+        function getQuestionTypeName(type) {
+            switch (type) {
+                case 'single-choice': return 'Один ответ';
+                case 'multiple-choice': return 'Несколько ответов';
+                case 'matching': return 'Сопоставление';
+                case 'sequencing': return 'Последовательность';
+                case 'true-false': return 'Правда/Ложь';
+                case 'short-answer': return 'Короткий ответ';
+                default: return 'Вопрос';
+            }
+        }
+
+
+        function updateQuestionData(questionId, field, value, optionId = null, subField = null) {
+            const question = quizData.find(q => q.id === questionId);
+            if (!question) return;
+
+            if (field === 'text') question.text = value;
+            else if (field === 'timeLimit') question.timeLimit = parseInt(value);
+            else if (field === 'option-text' && optionId) {
+                const option = question.options.find(opt => opt.id === optionId);
+                if (option) option.text = value;
+            } else if (field === 'match-left' && optionId) { // optionId is pairId here
+                const pair = question.pairs.find(p => p.id === optionId);
+                if (pair) pair.left = value;
+            } else if (field === 'match-right' && optionId) { // optionId is pairId here
+                const pair = question.pairs.find(p => p.id === optionId);
+                if (pair) pair.right = value;
+            } else if (field === 'sequence-item-text' && optionId) { // optionId is itemId here
+                const item = question.items.find(i => i.id === optionId);
+                if (item) item.text = value;
+            } else if (field === 'short-answer-correct') {
+                question.correctAnswer = value;
+            }
+        }
+
+        function addEditorEventListeners(editorCard, questionId) {
+            editorCard.addEventListener('input', (e) => {
+                const target = e.target;
+                const field = target.dataset.field;
+                if (!field) return;
+
+                const optionItem = target.closest('.option-item, .match-pair-editor, .sequence-item-editor');
+                const optionId = optionItem ? (optionItem.dataset.optionId || optionItem.dataset.pairId || optionItem.dataset.itemId) : null;
+                updateQuestionData(questionId, field, target.value, optionId);
+            });
+
+            editorCard.addEventListener('change', (e) => { // For radio/checkbox
+                const target = e.target;
+                const action = target.dataset.action;
+                const question = quizData.find(q => q.id === questionId);
+                if (!question) return;
+
+                if (action === 'set-correct') {
+                    const optionId = target.closest('.option-item').dataset.optionId;
+                    if (question.type === 'single-choice') {
+                        question.correctAnswer = optionId;
+                    } else if (question.type === 'multiple-choice') {
+                        if (!Array.isArray(question.correctAnswer)) question.correctAnswer = []; // Ensure it's an array
+                        if (target.checked) {
+                            if (!question.correctAnswer.includes(optionId)) {
+                                question.correctAnswer.push(optionId);
+                            }
+                        } else {
+                            question.correctAnswer = question.correctAnswer.filter(id => id !== optionId);
+                        }
+                    }
+                } else if (action === 'set-correct-tf') {
+                    question.correctAnswer = target.value === 'true';
+                }
+            });
+
+            editorCard.addEventListener('click', (e) => {
+                const target = e.target.closest('button');
+                if (!target) return;
+                const action = target.dataset.action;
+                const question = quizData.find(q => q.id === questionId);
+                if (!question) return;
+
+                if (action === 'remove-question') {
+                    quizData = quizData.filter(q => q.id !== questionId);
+                    editorCard.classList.add('fade-out');
+                    setTimeout(() => {
+                        editorCard.remove();
+                        if (quizData.length === 0 && dropPlaceholder) dropPlaceholder.classList.remove('hidden');
+                    }, 300);
+                } else if (action === 'add-option') {
+                    const newOption = { id: generateId(), text: '' };
+                    question.options.push(newOption);
+                    const cardToUpdate = questionsList.querySelector(`.question-editor-card[data-question-id="${questionId}"] .options-container`);
+                    if (cardToUpdate) { // More targeted update
+                        const newOptionHtml = `
+                            <div class="flex items-center mb-2 option-item" data-option-id="${newOption.id}">
+                                <input type="${question.type === 'single-choice' ? 'radio' : 'checkbox'}" name="correct_${question.id}" data-action="set-correct" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <input type="text" data-field="option-text" value="" class="flex-grow p-2 border border-gray-300 rounded-md" placeholder="Вариант ${question.options.length}">
+                                <button data-action="remove-option" class="ml-2 text-red-500 hover:text-red-700 p-1 text-xl font-bold">&times;</button>
+                            </div>`;
+                        target.insertAdjacentHTML('beforebegin', newOptionHtml);
+                    }
+                } else if (action === 'remove-option') {
+                    const optionElement = target.closest('.option-item');
+                    const optionId = optionElement.dataset.optionId;
+                    question.options = question.options.filter(opt => opt.id !== optionId);
+                    if (question.type === 'single-choice' && question.correctAnswer === optionId) {
+                        question.correctAnswer = null;
+                    } else if (question.type === 'multiple-choice' && Array.isArray(question.correctAnswer) && question.correctAnswer.includes(optionId)) {
+                        question.correctAnswer = question.correctAnswer.filter(id => id !== optionId);
+                    }
+                    optionElement.classList.add('fade-out');
+                    setTimeout(() => optionElement.remove(), 300);
+                } else if (action === 'increase-time') {
+                    question.timeLimit += TIME_STEP;
+                    target.previousElementSibling.textContent = question.timeLimit;
+                } else if (action === 'decrease-time') {
+                    if (question.timeLimit > TIME_STEP) {
+                        question.timeLimit -= TIME_STEP;
+                        target.nextElementSibling.textContent = question.timeLimit;
+                    }
+                } else if (action === 'add-match-pair') {
+                    const newPair = { id: generateId(), left: '', right: '' };
+                    question.pairs.push(newPair);
+                    const cardToUpdate = questionsList.querySelector(`.question-editor-card[data-question-id="${questionId}"] .options-container`);
+                     if (cardToUpdate) {
+                        const newPairHtml = `
+                            <div class="flex items-center gap-2 mb-2 match-pair-editor" data-pair-id="${newPair.id}">
+                                <input type="text" data-field="match-left" value="" class="w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Левый элемент ${question.pairs.length}">
+                                <span class="text-gray-500 mx-1">=</span>
+                                <input type="text" data-field="match-right" value="" class="w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Правый элемент ${question.pairs.length}">
+                                <button data-action="remove-match-pair" class="ml-1 text-red-500 hover:text-red-700 p-1 text-xl font-bold">&times;</button>
+                            </div>`;
+                        target.insertAdjacentHTML('beforebegin', newPairHtml);
+                    }
+                } else if (action === 'remove-match-pair') {
+                    const pairElement = target.closest('.match-pair-editor');
+                    const pairId = pairElement.dataset.pairId;
+                    question.pairs = question.pairs.filter(p => p.id !== pairId);
+                    pairElement.classList.add('fade-out');
+                    setTimeout(() => pairElement.remove(), 300);
+                } else if (action === 'add-sequence-item') {
+                    const newItem = { id: generateId(), text: '' };
+                    question.items.push(newItem);
+                    const itemsContainer = editorCard.querySelector('.sequence-items-editor');
+                    if (itemsContainer) {
+                        const newItemHtml = `
+                            <div class="flex items-center sequence-item-editor bg-gray-50 p-2 rounded border cursor-move" data-item-id="${newItem.id}" draggable="true">
+                                <span class="mr-2 text-gray-400">☰</span>
+                                <input type="text" data-field="sequence-item-text" value="" class="flex-grow p-2 border border-gray-300 rounded-md" placeholder="Элемент ${question.items.length}">
+                                <button data-action="remove-sequence-item" class="ml-2 text-red-500 hover:text-red-700 p-1 text-xl font-bold">&times;</button>
+                            </div>`;
+                        target.insertAdjacentHTML('beforebegin', newItemHtml); // Insert before the "add" button
+                        makeSequenceItemsDraggable(itemsContainer); // Re-apply draggable to new items if necessary
+                    }
+                } else if (action === 'remove-sequence-item') {
+                    const itemElement = target.closest('.sequence-item-editor');
+                    const itemId = itemElement.dataset.itemId;
+                    question.items = question.items.filter(i => i.id !== itemId);
+                    itemElement.classList.add('fade-out');
+                    setTimeout(() => itemElement.remove(), 300);
+                }
+            });
+        }
+
+        let draggedSequenceItem = null;
+        function makeSequenceItemsDraggable(container) {
+            if (!container) return;
+            const items = container.querySelectorAll('.sequence-item-editor'); // Target only editor items
+            items.forEach(item => {
+                // Remove old listeners to prevent duplicates if called multiple times
+                item.removeEventListener('dragstart', handleSequenceDragStart);
+                item.removeEventListener('dragend', handleSequenceDragEnd);
+
+                item.addEventListener('dragstart', handleSequenceDragStart);
+                item.addEventListener('dragend', handleSequenceDragEnd);
+            });
+
+            // Remove old listeners from container
+            container.removeEventListener('dragover', handleSequenceDragOver);
+            container.removeEventListener('drop', handleSequenceDrop);
+
+            container.addEventListener('dragover', handleSequenceDragOver);
+            container.addEventListener('drop', handleSequenceDrop);
+        }
+
+        function handleSequenceDragStart(e) {
+            draggedSequenceItem = e.target.closest('.sequence-item-editor');
+            if (!draggedSequenceItem) return;
+            setTimeout(() => draggedSequenceItem.classList.add('opacity-50'), 0);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedSequenceItem.dataset.itemId); // Necessary for Firefox
+        }
+
+        function handleSequenceDragEnd() {
+            if (draggedSequenceItem) {
+                draggedSequenceItem.classList.remove('opacity-50');
+            }
+            draggedSequenceItem = null;
+        }
+
+        function handleSequenceDragOver(e) {
+            e.preventDefault();
+            if (!draggedSequenceItem) return;
+            const container = e.currentTarget; // The container itself
+            const afterElement = getDragAfterElement(container, e.clientY, '.sequence-item-editor');
+            if (afterElement == null) {
+                container.appendChild(draggedSequenceItem);
+            } else {
+                container.insertBefore(draggedSequenceItem, afterElement);
+            }
+        }
+
+        function handleSequenceDrop(e) {
+            e.preventDefault();
+            if (!draggedSequenceItem) return;
+            const container = e.currentTarget;
+            const questionId = container.closest('.question-editor-card').dataset.questionId;
+            const question = quizData.find(q => q.id === questionId);
+            if (question && question.type === 'sequencing') {
+                const newOrderIds = Array.from(container.querySelectorAll('.sequence-item-editor')).map(el => el.dataset.itemId);
+                question.items.sort((a, b) => newOrderIds.indexOf(a.id) - newOrderIds.indexOf(b.id));
+            }
+            // draggedSequenceItem is reset in dragend
+        }
+
+
+        function getDragAfterElement(container, y, selector) {
+            const draggableElements = [...container.querySelectorAll(`${selector}:not(.opacity-50)`)];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+
+        // --- Drag and Drop for Question Templates & Click to Add ---
+        document.querySelectorAll('#question-templates-sidebar .draggable').forEach(draggableElement => {
+            // Drag functionality
+            draggableElement.addEventListener('dragstart', (e) => {
+                e.target.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', e.target.dataset.type);
+                e.dataTransfer.effectAllowed = 'copy';
+            });
+            draggableElement.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+            });
+
+            // Click functionality
+            draggableElement.addEventListener('click', (e) => {
+                const questionType = e.currentTarget.dataset.type; // Use currentTarget for the element with listener
+                if (questionType) {
+                    addQuestionToQuiz(questionType);
+                }
+            });
+        });
+
+        quizConstructionArea.addEventListener('dragover', (e) => {
+            e.preventDefault(); // Necessary to allow dropping
+            quizConstructionArea.classList.add('drag-over');
+            e.dataTransfer.dropEffect = 'copy';
+        });
+
+        quizConstructionArea.addEventListener('dragleave', () => {
+            quizConstructionArea.classList.remove('drag-over');
+        });
+
+        quizConstructionArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            quizConstructionArea.classList.remove('drag-over');
+            const questionType = e.dataTransfer.getData('text/plain');
+            if (questionType) {
+                addQuestionToQuiz(questionType);
+            }
+        });
+
+        // --- Publishing Test ---
+        publishTestBtn.addEventListener('click', () => {
+            if (quizData.length === 0) {
+                showMessage('Нельзя опубликовать пустой тест. Добавьте хотя бы один вопрос.');
+                return;
+            }
+            // Basic validation
+            for (const q of quizData) {
+                if (!q.text.trim()) {
+                    showMessage(`Вопрос "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) не имеет текста.`);
+                    return;
+                }
+                if ((q.type === 'single-choice' || q.type === 'multiple-choice') && q.options.some(opt => !opt.text.trim())) {
+                     showMessage(`В вопросе "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) есть пустые варианты ответа.`);
+                    return;
+                }
+                if (q.type === 'single-choice' && !q.correctAnswer) { // Check for null or empty string if applicable
+                     showMessage(`Для вопроса "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) не выбран правильный ответ.`);
+                    return;
+                }
+                 if (q.type === 'multiple-choice' && (!Array.isArray(q.correctAnswer) || q.correctAnswer.length === 0)) {
+                     showMessage(`Для вопроса "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) не выбраны правильные ответы.`);
+                    return;
+                }
+                if (q.type === 'matching' && q.pairs.some(p => !p.left.trim() || !p.right.trim())) {
+                     showMessage(`В вопросе "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) есть незаполненные пары.`);
+                    return;
+                }
+                 if (q.type === 'sequencing' && q.items.some(i => !i.text.trim())) {
+                     showMessage(`В вопросе "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) есть незаполненные элементы последовательности.`);
+                    return;
+                }
+                 if (q.type === 'true-false' && q.correctAnswer === null) { // Specifically check for null, as false is a valid answer
+                     showMessage(`Для вопроса "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) не выбран правильный ответ (Правда/Ложь).`);
+                    return;
+                }
+                 if (q.type === 'short-answer' && (q.correctAnswer === null || q.correctAnswer.trim() === '')) {
+                     showMessage(`Для вопроса "${getQuestionTypeName(q.type)}" (ID: ${q.id.substring(0,4)}) не указан правильный короткий ответ.`);
+                    return;
+                }
+            }
+
+
+            currentQuizId = 'quiz_' + Date.now();
+            try {
+                sessionStorage.setItem(currentQuizId, JSON.stringify(quizData));
+                sessionStorage.setItem('leaderboard_' + currentQuizId, JSON.stringify([])); // Initialize empty leaderboard
+            } catch (e) {
+                showMessage('Ошибка сохранения теста. Возможно, хранилище переполнено.', true);
+                console.error("Error saving to sessionStorage:", e);
+                return;
+            }
+
+
+            const link = `${window.location.href.split('#')[0]}#${currentQuizId}`;
+            generatedLinkInput.value = link;
+            testLinkModal.classList.remove('hidden');
+            testLinkModal.classList.add('flex');
+            setTimeout(() => { // For transition
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 50);
+
+            navigator.clipboard.writeText(link)
+                .then(() => showMessage('Тест успешно опубликован! Ссылка скопирована.', false))
+                .catch(err => {
+                    console.warn("Не удалось автоматически скопировать ссылку:", err);
+                    showMessage('Тест успешно опубликован! Скопируйте ссылку вручную.', false);
+                });
+        });
+
+        closeModalBtn.addEventListener('click', () => {
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                testLinkModal.classList.remove('flex');
+                testLinkModal.classList.add('hidden');
+            }, 300);
+        });
+        copyLinkBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(generatedLinkInput.value)
+                .then(() => showMessage('Ссылка скопирована!', false))
+                .catch(err => showMessage('Не удалось скопировать ссылку.', true));
+        });
+
+        // --- Test Taking Logic ---
+        function loadQuizForTaking(quizIdFromHash) {
+            const storedQuizData = sessionStorage.getItem(quizIdFromHash); // Use quizIdFromHash
+            if (storedQuizData) {
+                quizData = JSON.parse(storedQuizData);
+                currentQuizId = quizIdFromHash; // Set currentQuizId for result saving
+                
+                // We need participant name to check if they completed it.
+                // So, always go to name entry first. The check will happen in startTestBtn.
+                showView('name-entry-view');
+                quizLinkInfo.textContent = `Вы собираетесь пройти тест. Введите ваше имя.`;
+                participantNameInput.value = ''; // Clear name field for new attempt or first attempt
+            } else {
+                showMessage('Тест не найден. Возможно, ссылка устарела или неверна.', true);
+                initializeCreateTestView(); // Go back to creation
+                window.location.hash = ''; // Clear invalid hash
+            }
+        }
+
+        startTestBtn.addEventListener('click', () => {
+            currentParticipantName = participantNameInput.value.trim();
+            if (!currentParticipantName) {
+                showMessage('Пожалуйста, введите ваше имя.');
+                return;
+            }
+            if (!currentQuizId || quizData.length === 0) { // Ensure quizData is loaded via currentQuizId
+                 showMessage('Ошибка: данные теста не загружены или ID теста отсутствует.', true);
+                 initializeCreateTestView();
+                 return;
+            }
+
+            // Check if this participant has already completed THIS quiz
+            const completedKey = `completed_${currentQuizId}_${currentParticipantName}`;
+            if (sessionStorage.getItem(completedKey)) {
+                showMessage(`Вы (${currentParticipantName}) уже проходили этот тест. Показываю ваши предыдущие результаты.`, false, 4000);
+                loadResults(); // Directly load results for this user
+                return;
+            }
+
+            currentQuestionIndex = 0;
+            participantScores[currentParticipantName] = 0; // Reset score for this attempt
+            userAnswers = [];
+            loadQuestionScreen();
+        });
+
+        function loadQuestionScreen() {
+            if (currentQuestionIndex < quizData.length) {
+                showView('question-view');
+                renderTestQuestion(quizData[currentQuestionIndex]);
+                submitAnswerBtn.classList.remove('hidden');
+                submitAnswerBtn.disabled = false; // Ensure button is enabled
+                nextQuestionBtn.classList.add('hidden');
+            } else {
+                endTest();
+            }
+        }
+
+        function renderTestQuestion(question) {
+            questionNumberDisplay.textContent = `Вопрос ${currentQuestionIndex + 1} из ${quizData.length}`;
+            currentQuestionTimeLeft = question.timeLimit;
+            timeLeftDisplay.textContent = currentQuestionTimeLeft;
+            startQuestionTimer();
+
+            let contentHtml = `<h3 class="text-xl font-semibold mb-4">${question.text}</h3>`;
+            const questionRenderId = `qrender_${question.id}`; // Unique ID for radio groups
+
+            if (question.type === 'single-choice' || question.type === 'multiple-choice') {
+                const shuffledOptions = shuffleArray([...question.options]);
+                contentHtml += `<div class="space-y-3">` + shuffledOptions.map(opt => `
+                    <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg answer-option cursor-pointer hover:border-blue-400">
+                        <input type="${question.type === 'single-choice' ? 'radio' : 'checkbox'}" name="ans_${questionRenderId}" value="${opt.id}" class="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <span class="text-gray-700">${opt.text}</span>
+                    </label>
+                `).join('') + `</div>`;
+            } else if (question.type === 'true-false') {
+                 contentHtml += `<div class="space-y-3">` + question.options.map(opt => `
+                    <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg answer-option cursor-pointer hover:border-blue-400">
+                        <input type="radio" name="ans_tf_${questionRenderId}" value="${opt.value}" class="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <span class="text-gray-700">${opt.text}</span>
+                    </label>
+                `).join('') + `</div>`;
+            } else if (question.type === 'short-answer') {
+                contentHtml += `
+                    <input type="text" id="shortAnswerInput_${question.id}" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Введите ваш ответ...">
+                `;
+            } else if (question.type === 'matching') {
+                contentHtml = `<h3 class="text-xl font-semibold mb-4">${question.text}</h3>`; // Reset for this type
+                contentHtml += `<p class="text-sm text-gray-600 mb-3">Перетащите элементы из правого столбца, чтобы они соответствовали элементам в левом столбце.</p>`;
+                contentHtml += `<div class="flex flex-col sm:flex-row gap-4" id="matching-area-${question.id}">`;
+                
+                const displayPairs = shuffleArray([...question.pairs]); 
+                question.currentDisplayPairs = displayPairs.map(p => ({id: p.id, left: p.left, right: p.right})); // Store full pair info for checking
+
+                contentHtml += `<div class="w-full sm:w-1/2 space-y-2">`;
+                question.currentDisplayPairs.forEach(pair => { // Use the stored shuffled display pairs
+                     contentHtml += `<div class="bg-slate-100 p-3 rounded-lg border border-slate-300 h-[50px] flex items-center justify-center text-center">${pair.left}</div>`;
+                });
+                contentHtml += `</div>`;
+
+                const draggableRightItems = shuffleArray([...question.pairs.map(p => ({ id: p.id, text: p.right }))]);
+                question.currentRightOrder = draggableRightItems.map(item => item.id); 
+
+                contentHtml += `<div class="w-full sm:w-1/2 space-y-2" id="match-droppable-right-${question.id}">`;
+                draggableRightItems.forEach(item => {
+                    contentHtml += `<div class="match-item bg-sky-100 p-3 rounded-lg border border-sky-300 shadow-sm h-[50px] flex items-center justify-center text-center" draggable="true" data-item-id="${item.id}">${item.text}</div>`;
+                });
+                contentHtml += `</div></div>`; 
+                setTimeout(() => setupDraggableList(document.getElementById(`match-droppable-right-${question.id}`), 'matching'), 0);
+
+            } else if (question.type === 'sequencing') {
+                 contentHtml += `<p class="text-sm text-gray-600 mb-3">Расставьте элементы в правильном порядке, перетаскивая их.</p>`;
+                 const shuffledItems = shuffleArray([...question.items]); // Original items are in question.items
+                 question.currentSequencingOrder = shuffledItems.map(item => item.id); 
+
+                 contentHtml += `<div class="space-y-2" id="sequence-list-${question.id}">`;
+                 shuffledItems.forEach(item => {
+                    contentHtml += `<div class="sequence-item bg-purple-100 p-3 rounded-lg border border-purple-300 shadow-sm" draggable="true" data-item-id="${item.id}">${item.text}</div>`;
+                 });
+                 contentHtml += `</div>`;
+                 setTimeout(() => setupDraggableList(document.getElementById(`sequence-list-${question.id}`), 'sequencing'), 0);
+            }
+
+            questionContainer.innerHTML = contentHtml;
+            questionContainer.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const label = e.target.closest('label.answer-option');
+                    if (!label) return;
+                    if (e.target.type === 'radio') {
+                        // Remove 'selected' from all options in the group first
+                        const groupName = e.target.name;
+                        document.querySelectorAll(`input[name="${groupName}"]`).forEach(radioInGroup => {
+                            radioInGroup.closest('label.answer-option')?.classList.remove('selected');
+                        });
+                         label.classList.add('selected'); // Then add to the clicked one
+                    } else {
+                        label.classList.toggle('selected', e.target.checked);
+                    }
+                });
+            });
+        }
+
+        let draggedListItem = null; // Used for test taking drag/drop
+        function setupDraggableList(listContainer, type) { // Removed questionId param, get from currentQuestionIndex
+            if (!listContainer) return;
+            const items = listContainer.querySelectorAll(type === 'matching' ? '.match-item' : '.sequence-item');
+
+            items.forEach(item => {
+                item.removeEventListener('dragstart', handleTestListDragStart); // Prevent duplicate listeners
+                item.removeEventListener('dragend', handleTestListDragEnd);
+                item.addEventListener('dragstart', handleTestListDragStart);
+                item.addEventListener('dragend', handleTestListDragEnd);
+            });
+            
+            listContainer.removeEventListener('dragover', handleTestListDragOver); // Prevent duplicate listeners
+            listContainer.removeEventListener('drop', handleTestListDrop);
+            listContainer.addEventListener('dragover', handleTestListDragOver);
+            listContainer.addEventListener('drop', handleTestListDrop);
+        }
+        
+        function handleTestListDragStart(e) {
+            draggedListItem = e.target.closest(e.target.classList.contains('match-item') ? '.match-item' : '.sequence-item');
+            if(!draggedListItem) return;
+            setTimeout(() => draggedListItem.classList.add('opacity-50'), 0);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedListItem.dataset.itemId);
+        }
+
+        function handleTestListDragEnd() {
+            if (draggedListItem) draggedListItem.classList.remove('opacity-50');
+            draggedListItem = null;
+        }
+
+        function handleTestListDragOver(e) {
+            e.preventDefault();
+            if (!draggedListItem) return;
+            const container = e.currentTarget;
+            const itemSelector = container.id.includes('match') ? '.match-item' : '.sequence-item';
+            const afterElement = getDragAfterElement(container, e.clientY, itemSelector);
+            if (afterElement == null) {
+                container.appendChild(draggedListItem);
+            } else {
+                container.insertBefore(draggedListItem, afterElement);
+            }
+        }
+
+        function handleTestListDrop(e) {
+            e.preventDefault();
+            if (!draggedListItem) return;
+            const question = quizData[currentQuestionIndex];
+            const listContainer = e.currentTarget;
+            const orderedIds = Array.from(listContainer.children).map(child => child.dataset.itemId);
+            
+            if (listContainer.id.includes('match')) { // Matching question
+                question.currentRightOrder = orderedIds;
+            } else if (listContainer.id.includes('sequence')) { // Sequencing question
+                question.currentSequencingOrder = orderedIds;
+            }
+            // draggedListItem reset in dragend
+        }
+
+
+        function startQuestionTimer() {
+            clearInterval(questionTimerInterval);
+            timeLeftDisplay.textContent = currentQuestionTimeLeft; // Ensure initial display is correct
+            questionTimerInterval = setInterval(() => {
+                currentQuestionTimeLeft--;
+                timeLeftDisplay.textContent = currentQuestionTimeLeft;
+                if (currentQuestionTimeLeft <= 0) {
+                    clearInterval(questionTimerInterval);
+                    timeLeftDisplay.textContent = "0";
+                    processAnswer(true); // Timeout
+                }
+            }, 1000);
+        }
+
+        submitAnswerBtn.addEventListener('click', () => processAnswer(false));
+        nextQuestionBtn.addEventListener('click', loadQuestionScreen);
+
+
+        function processAnswer(isTimeout) {
+            clearInterval(questionTimerInterval);
+            submitAnswerBtn.disabled = true; // Disable submit button after processing
+            const question = quizData[currentQuestionIndex];
+            let scoreForThisQuestion = 0;
+            let selectedAnswerData = { questionId: question.id, type: question.type, answer: null, isCorrect: false, isTimeout: isTimeout };
+
+            if (!isTimeout) {
+                if (question.type === 'single-choice') {
+                    const selected = questionContainer.querySelector(`input[name="ans_qrender_${question.id}"]:checked`);
+                    if (selected) {
+                        selectedAnswerData.answer = selected.value;
+                        if (selected.value === question.correctAnswer) scoreForThisQuestion = 1;
+                    }
+                } else if (question.type === 'multiple-choice') {
+                    const selectedOptions = Array.from(questionContainer.querySelectorAll(`input[name="ans_qrender_${question.id}"]:checked`)).map(cb => cb.value);
+                    selectedAnswerData.answer = selectedOptions;
+                    const correctSet = new Set(question.correctAnswer);
+                    const selectedSet = new Set(selectedOptions);
+                    if (selectedSet.size === correctSet.size && [...selectedSet].every(id => correctSet.has(id))) {
+                        scoreForThisQuestion = 1;
+                    }
+                } else if (question.type === 'true-false') {
+                    const selected = questionContainer.querySelector(`input[name="ans_tf_qrender_${question.id}"]:checked`);
+                    if (selected) {
+                        const val = selected.value === 'true'; // Convert string "true" to boolean true
+                        selectedAnswerData.answer = val;
+                        if (val === question.correctAnswer) scoreForThisQuestion = 1;
+                    }
+                } else if (question.type === 'short-answer') {
+                    const inputElem = document.getElementById(`shortAnswerInput_${question.id}`);
+                    if (inputElem) {
+                        const userAnswer = inputElem.value.trim();
+                        selectedAnswerData.answer = userAnswer;
+                        // Case-insensitive comparison for short answers
+                        if (userAnswer.toLowerCase() === question.correctAnswer.toLowerCase()) {
+                            scoreForThisQuestion = 1;
+                        }
+                    }
+                } else if (question.type === 'matching') {
+                    let allMatched = true;
+                    // question.currentDisplayPairs contains {id, left, right} of the original pairs, but shuffled for display of left side.
+                    // question.currentRightOrder contains the IDs of the right-side items in the order the user arranged them.
+                    // We need to check if for each item in currentDisplayPairs, its corresponding item in currentRightOrder (by index) has the SAME original ID.
+                    if (!question.currentDisplayPairs || !question.currentRightOrder || question.currentDisplayPairs.length !== question.currentRightOrder.length) {
+                        allMatched = false;
+                    } else {
+                        for (let i = 0; i < question.currentDisplayPairs.length; i++) {
+                            // The left item is question.currentDisplayPairs[i].id (this is the ID of the *pair*)
+                            // The right item chosen by user for this position is question.currentRightOrder[i] (this is also the ID of the *pair*)
+                            if (question.currentDisplayPairs[i].id !== question.currentRightOrder[i]) {
+                                allMatched = false;
+                                break;
+                            }
+                        }
+                    }
+                    selectedAnswerData.answer = question.currentRightOrder;
+                    if (allMatched) scoreForThisQuestion = 1;
+
+                } else if (question.type === 'sequencing') {
+                    let correctlyOrdered = true;
+                    // question.items is the original correct order {id, text}
+                    // question.currentSequencingOrder has the IDs in user-arranged order.
+                    if (!question.items || !question.currentSequencingOrder || question.items.length !== question.currentSequencingOrder.length) {
+                        correctlyOrdered = false;
+                    } else {
+                        for (let i = 0; i < question.items.length; i++) {
+                            if (question.items[i].id !== question.currentSequencingOrder[i]) {
+                                correctlyOrdered = false;
+                                break;
+                            }
+                        }
+                    }
+                    selectedAnswerData.answer = question.currentSequencingOrder;
+                    if (correctlyOrdered) scoreForThisQuestion = 1;
+                }
+            }
+
+            selectedAnswerData.isCorrect = scoreForThisQuestion > 0;
+            userAnswers.push(selectedAnswerData);
+
+            if (scoreForThisQuestion > 0) {
+                participantScores[currentParticipantName] = (participantScores[currentParticipantName] || 0) + scoreForThisQuestion;
+                showMessage('Правильно!', false, 1500);
+            } else if (!isTimeout) {
+                showMessage('Неправильно или неполный ответ.', true, 1500);
+            } else {
+                 showMessage('Время вышло!', true, 1500);
+            }
+
+            questionContainer.querySelectorAll('input, .answer-option').forEach(el => {
+                el.disabled = true;
+                el.classList.add('disabled:opacity-75', 'disabled:cursor-not-allowed');
+                if(el.classList.contains('answer-option')) el.classList.remove('hover:border-blue-400', 'cursor-pointer');
+            });
+            questionContainer.querySelectorAll('.match-item, .sequence-item').forEach(el => {
+                el.draggable = false;
+                el.classList.remove('cursor-grab');
+                el.classList.add('cursor-not-allowed', 'opacity-75');
+            });
+
+
+            submitAnswerBtn.classList.add('hidden');
+            nextQuestionBtn.classList.remove('hidden');
+
+            currentQuestionIndex++;
+        }
+
+
+        function endTest() {
+            let leaderboard = JSON.parse(sessionStorage.getItem('leaderboard_' + currentQuizId) || '[]');
+            const existingEntryIndex = leaderboard.findIndex(p => p.name === currentParticipantName);
+            const currentScore = participantScores[currentParticipantName] || 0;
+
+            if (existingEntryIndex > -1) { // Participant took test before
+                if (currentScore >= leaderboard[existingEntryIndex].score) { // Update if new score is higher or equal
+                    leaderboard[existingEntryIndex].score = currentScore;
+                }
+            } else { // New participant
+                leaderboard.push({ name: currentParticipantName, score: currentScore });
+            }
+            
+            leaderboard.sort((a, b) => b.score - a.score);
+            try {
+                sessionStorage.setItem('leaderboard_' + currentQuizId, JSON.stringify(leaderboard));
+                sessionStorage.setItem(`completed_${currentQuizId}_${currentParticipantName}`, 'true'); // Mark as completed with this name
+            } catch(e) {
+                console.error("Error saving leaderboard to sessionStorage:", e);
+                showMessage("Не удалось сохранить результаты, возможно хранилище переполнено.", true);
+            }
+            loadResults();
+        }
+
+        function loadResults() {
+            const leaderboardData = JSON.parse(sessionStorage.getItem('leaderboard_' + currentQuizId) || '[]');
+            leaderboardBody.innerHTML = ''; 
+
+            if (leaderboardData.length === 0) {
+                leaderboardBody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-gray-500">Пока нет результатов.</td></tr>';
+            } else {
+                leaderboardData.forEach((entry, index) => {
+                    const row = leaderboardBody.insertRow();
+                    const placeCell = row.insertCell();
+                    placeCell.textContent = index + 1;
+                    placeCell.className = "border border-slate-300 p-3";
+
+                    const nameCell = row.insertCell();
+                    nameCell.textContent = entry.name;
+                    nameCell.className = "border border-slate-300 p-3";
+                    
+                    const scoreCell = row.insertCell();
+                    scoreCell.textContent = entry.score;
+                    scoreCell.className = "border border-slate-300 p-3";
+
+
+                    if (index === 0) row.classList.add('prize-1', 'font-bold', 'text-yellow-900');
+                    else if (index === 1) row.classList.add('prize-2', 'font-semibold', 'text-gray-700');
+                    else if (index === 2) row.classList.add('prize-3', 'font-medium', 'text-orange-800');
+
+                    if (entry.name === currentParticipantName) { 
+                        row.classList.add('bg-blue-100', 'ring-2', 'ring-blue-500');
+                    }
+                });
+            }
+            showView('results-view');
+        }
+
+        // --- Navigation and Initialization ---
+        navigateToCreateTestBtn.addEventListener('click', () => {
+            window.location.hash = ''; // Clear hash to ensure fresh start
+            initializeCreateTestView();
+        });
+        backToCreateBtnResults.addEventListener('click', () => {
+            window.location.hash = '';
+            initializeCreateTestView();
+        });
+
+        retakeTestBtn.addEventListener('click', () => {
+            if (currentQuizId) {
+                // Clear completion status for current user to allow retake
+                sessionStorage.removeItem(`completed_${currentQuizId}_${currentParticipantName}`);
+                participantNameInput.value = ''; // Clear name for "new" participant experience
+                loadQuizForTaking(currentQuizId); 
+            } else {
+                initializeCreateTestView(); 
+            }
+        });
+
+
+        function handleHashChange() {
+            const hash = window.location.hash.substring(1);
+            if (hash && hash.startsWith('quiz_')) {
+                loadQuizForTaking(hash);
+            } else {
+                // If hash is empty or not a quiz link, go to create view
+                // This also handles clearing the hash manually by user
+                if (currentView !== 'create-test-view') { // Avoid redundant calls if already there
+                    initializeCreateTestView();
+                }
+            }
+        }
+
+        // Initial load
+        window.addEventListener('hashchange', handleHashChange);
+        window.addEventListener('load', () => {
+            handleHashChange(); // Process hash on initial load
+            if (!window.location.hash) { // If no hash, ensure create view is shown
+                 initializeCreateTestView();
+            }
+        });
+
+    </script>
+</body>
+</html>
